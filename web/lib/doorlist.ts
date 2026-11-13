@@ -1,6 +1,6 @@
 // Every read of the Doorlist contract goes through here. No sample data: what the chain says is what the screens show.
 import { decodeAbiParameters, parseAbiItem, toEventSelector, type Address, type Hex } from 'viem';
-import { client, DOORLIST, DEPLOY_BLOCK, doorlistAbi, DUSD, NATIVE } from './chain';
+import { client, DOORLIST, DEPLOY_BLOCK, doorlistAbi, DUSD, NATIVE, activeChain, isBotChain } from './chain';
 
 export type Currency = { address: Address; symbol: string; decimals: number };
 
@@ -34,7 +34,7 @@ export const FEE_BPS = 300;
 
 export function currencyOf(address: Address): Currency {
   if (address.toLowerCase() === DUSD.address.toLowerCase()) return { address, symbol: DUSD.symbol, decimals: DUSD.decimals };
-  if (address === NATIVE) return { address, symbol: 'POT', decimals: 18 };
+  if (address === NATIVE) return { address, symbol: activeChain.nativeCurrency.symbol, decimals: activeChain.nativeCurrency.decimals };
   return { address, symbol: 'token', decimals: 18 };
 }
 
@@ -93,9 +93,9 @@ export async function uriFromSubstrate(id: number): Promise<string | undefined> 
 }
 
 export async function getEvent(id: number): Promise<DoorEvent> {
-  const [e, uriLogs] = await Promise.all([read<EventTuple>('events', [BigInt(id)]), logs(URI_SET, { eventId: BigInt(id) })]);
+  const [e, uriLogs] = await Promise.all([read<EventTuple>('events', [BigInt(id)]), isBotChain ? Promise.resolve([]) : logs(URI_SET, { eventId: BigInt(id) })]);
   const last = uriLogs.at(-1) as unknown as { args: { uri: string } } | undefined;
-  const uri = last ? last.args.uri : undefined; // the Substrate lookup runs later, in useMedia, so the page does not wait
+  const uri = last ? last.args.uri : isBotChain ? '' : undefined; // the Substrate lookup runs later, in useMedia, so the page does not wait
   return {
     id,
     organizer: e[0],

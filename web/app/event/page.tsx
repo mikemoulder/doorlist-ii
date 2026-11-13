@@ -6,7 +6,7 @@ import { CalendarDays, Check, Gift, MapPin, ShieldCheck, Ticket as TicketIcon, U
 import { isAddress, maxUint256, type Address } from 'viem';
 import { AppShell } from '@/components/AppShell';
 import { Cover, DoorsBar, StatusTag, useMedia } from '@/components/EventBits';
-import { client, DOORLIST, DUSD, erc20Abi, FAUCET, NATIVE } from '@/lib/chain';
+import { activeChain, client, DOORLIST, DUSD, erc20Abi, FAUCET, NATIVE } from '@/lib/chain';
 import { getCheckIns, getEvent, getListings, heldBy, phase, PAYOUT_DELAY, type DoorEvent, type Ticket } from '@/lib/doorlist';
 import { money, price, shortAddress, when } from '@/lib/format';
 import { explain, useWallet } from '@/lib/wallet';
@@ -213,7 +213,7 @@ function BuyPanel({ e, onBought }: { e: DoorEvent; onBought: () => void }) {
         <span className="kpi-label">Ticket</span>
         <span className="buy-figure num">{price(e.price, e.currency)}</span>
         <span className="faint" style={{ fontSize: 13 }}>
-          {native ? 'Paid in POT' : 'Paid in Doorlist USD (dUSD), a dollar token on Portaldot'}
+          {native ? `Paid in ${e.currency.symbol}` : 'Paid in Doorlist USD (dUSD), a dollar token on Portaldot'}
         </span>
       </div>
 
@@ -275,7 +275,7 @@ function BuyPanel({ e, onBought }: { e: DoorEvent; onBought: () => void }) {
               <p className="faint" style={{ fontSize: 13 }}>
                 {balance !== undefined && <>You have {money(balance, e.currency)}. </>}
                 {mine !== undefined && e.maxPerWallet > 0 && <>You hold {mine} of {e.maxPerWallet} allowed. </>}
-                A small network fee in POT applies.
+                A small network fee in {activeChain.nativeCurrency.symbol} applies.
               </p>
               {!enough && claimed === false ? (
                 <div className="notice">

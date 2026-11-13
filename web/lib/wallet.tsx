@@ -5,7 +5,7 @@
 // Either way `address` is the 0x address the contracts see, so every read works the same.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { BaseError, ContractFunctionRevertedError, createWalletClient, custom, numberToHex, type Abi, type Address, type Hash } from 'viem';
-import { client, DOORLIST, doorlistAbi, portaldot } from './chain';
+import { client, DOORLIST, doorlistAbi, activeChain, isBotChain } from './chain';
 import {
   ContractRevert, contractAddress, ensureMapped, reviveWrite, sendNative, signText, substrateAccountsOf, substrateExtensions,
   type ContractLog, type SubstrateAccount,
@@ -61,12 +61,12 @@ export function explain(err: unknown): string {
     const name = revert?.data?.errorName;
     if (name && REASONS[name]) return REASONS[name];
     if (/rejected|denied/i.test(err.shortMessage)) return 'You cancelled the confirmation in your wallet.';
-    if (/insufficient|funds/i.test(err.message)) return 'Not enough POT in this wallet for the network fee.';
+    if (/insufficient|funds/i.test(err.message)) return `Not enough ${activeChain.nativeCurrency.symbol} in this wallet for the network fee.`;
     return err.shortMessage;
   }
   const msg = err instanceof Error ? err.message : String(err);
   if (/cancelled|rejected|denied/i.test(msg)) return 'You cancelled the confirmation in your wallet.';
-  if (/Inability to pay|balance too low|Payment/i.test(msg)) return 'Not enough POT in this wallet for the network fee.';
+  if (/Inability to pay|balance too low|Payment/i.test(msg)) return `Not enough ${activeChain.nativeCurrency.symbol} in this wallet for the network fee.`;
   return msg;
 }
 
@@ -99,13 +99,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const ensureChain = useCallback(async (p: Provider) => {
-    const id = numberToHex(portaldot.id);
+    const id = numberToHex(activeChain.id);
     try {
       await p.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: id }] });
     } catch {
       await p.request({
         method: 'wallet_addEthereumChain',
-        params: [{ chainId: id, chainName: portaldot.name, nativeCurrency: portaldot.nativeCurrency, rpcUrls: portaldot.rpcUrls.default.http }],
+        params: [{ chainId: id, chainName: activeChain.name, nativeCurrency: activeChain.nativeCurrency, rpcUrls: activeChain.rpcUrls.default.http }],
       });
     }
   }, []);
@@ -165,6 +165,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return;
     if (saved.startsWith('sub:')) {
+      if (isBotChain) return;
       const [, source, ss58] = saved.split(':');
       const t = setTimeout(() => {
         if (!substrateExtensions().some((x) => x.source === source)) return;
@@ -205,7 +206,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (active.kind === 'substrate') return reviveWrite(active.account, { to, abi, functionName, args, value: opts.value });
 
       await ensureChain(active.wallet.provider);
-      const wallet = createWalletClient({ account: address, chain: portaldot, transport: custom(active.wallet.provider) });
+      const wallet = createWalletClient({ account: address, chain: activeChain, transport: custom(active.wallet.provider) });
       const call = { address: to, abi: abi as never, functionName: functionName as never, args: args as never, account: address, value: opts.value };
       await client.simulateContract(call); // surfaces the contract's own revert reason before the wallet opens
       const [gas, gasPrice] = await Promise.all([client.estimateContractGas(call), client.getGasPrice()]);
@@ -223,7 +224,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     async (message) => {
       if (!active || !address) throw new Error('Sign in with your wallet first.');
       if (active.kind === 'substrate') return signText(active.account, message);
-      const wallet = createWalletClient({ account: address, chain: portaldot, transport: custom(active.wallet.provider) });
+      const wallet = createWalletClient({ account: address, chain: activeChain, transport: custom(active.wallet.provider) });
       return wallet.signMessage({ account: address, message });
     },
     [active, address],
@@ -234,7 +235,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (!active || !address) throw new Error('Sign in with your wallet first.');
       if (active.kind === 'substrate') return (await sendNative(active.account, to, value)).hash;
       await ensureChain(active.wallet.provider);
-      const wallet = createWalletClient({ account: address, chain: portaldot, transport: custom(active.wallet.provider) });
+      const wallet = createWalletClient({ account: address, chain: activeChain, transport: custom(active.wallet.provider) });
       const [gas, gasPrice] = await Promise.all([client.estimateGas({ account: address, to, value }), client.getGasPrice()]);
       const hash = await wallet.sendTransaction({ account: address, to, value, gas: (gas * 11n) / 10n, gasPrice, type: 'legacy' } as never);
       await client.waitForTransactionReceipt({ hash });
@@ -282,6 +283,7 @@ function WalletPicker({ wallets, connecting, onEvm, onSubstrate, onDone }: {
   useEffect(() => {
     ref.current?.showModal();
     // Extensions inject at document start, but give a slow one a moment.
+    if (isBotChain) return;
     setExtensions(substrateExtensions());
     const t = setTimeout(() => setExtensions(substrateExtensions()), 500);
     return () => clearTimeout(t);
@@ -327,7 +329,7 @@ function WalletPicker({ wallets, connecting, onEvm, onSubstrate, onDone }: {
             ))}
           </ul>
         ) : none ? (
-          <p className="muted">No wallet found in this browser. Install the Portaldot Wallet from portaldot.world, then reload this page.</p>
+          <p className="muted">{isBotChain ? 'Install an EVM browser wallet, then reload this page.' : 'Install the Portaldot Wallet, then reload this page.'}</p>
         ) : (
           <ul>
             {extensions.map((x) => (
@@ -355,7 +357,7 @@ function WalletPicker({ wallets, connecting, onEvm, onSubstrate, onDone }: {
         {connecting && <p className="faint">Check your wallet to approve the sign-in.</p>}
         {error && <p className="notice notice-error">{error}</p>}
         <div className="picker-foot">
-          {none && (
+          {none && !isBotChain && (
             <a className="pill pill-primary" href="https://www.portaldot.world" target="_blank" rel="noreferrer">
               Get the Portaldot Wallet
             </a>

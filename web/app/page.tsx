@@ -6,7 +6,7 @@ import { Mark } from '@/components/Logo';
 import { useLiveCode } from '@/components/landing/useLiveCode';
 import { getEvents, phase, type DoorEvent } from '@/lib/doorlist';
 import { price, when, shortAddress } from '@/lib/format';
-import { DOORLIST, EXPLORER } from '@/lib/chain';
+import { activeChain, DOORLIST, EXPLORER, isBotChain } from '@/lib/chain';
 import { MAX_AGE_SECONDS, REFRESH_SECONDS } from '@/lib/pass';
 import credits from '@/public/world/credits.json';
 import './landing.css';
@@ -84,7 +84,7 @@ function Hero({ live, onSale }: { live: Live; onSale?: number }) {
           </Link>
         </div>
         <p className="hero-note" data-load style={v({ '--d': '580ms' })}>
-          {onSale === undefined ? 'Reading Portaldot…' : onSale === 0 ? 'Running on the Portaldot V3 testnet.' : `${onSale} event${onSale === 1 ? '' : 's'} on sale on Portaldot now.`}
+          {onSale === undefined ? `Reading ${activeChain.name}…` : onSale === 0 ? `Running on ${activeChain.name}.` : `${onSale} event${onSale === 1 ? '' : 's'} on sale on ${activeChain.name} now.`}
         </p>
       </div>
 
@@ -538,16 +538,18 @@ function Footer() {
           <a href="#faq-h">Questions</a>
         </div>
         <div>
-          <h3>On Portaldot</h3>
+          <h3>{activeChain.name}</h3>
           <a href={EXPLORER}>Network explorer</a>
           <span className="num" title={DOORLIST}>
             Contract {shortAddress(DOORLIST)}
           </span>
-          <span>dUSD, asset 2026</span>
+          {!isBotChain && <span>dUSD, asset 2026</span>}
         </div>
         <div className="foot-about">
-          <p>Doorlist was built for the Portaldot Hacker House 2026 and runs on the Portaldot V3 testnet.</p>
-          <p>No cookies, no tracking.</p>
+          <p>Doorlist is an independent event ticketing app. Organizers sell wallet-held tickets and check guests in with rotating QR codes.</p>
+          <p>The current demo runs on {activeChain.name}.</p>
+          <a href="https://botchain.ai">BOT Chain</a>
+          <a href="https://scan.botchain.ai">BOT Chain Explorer</a>
         </div>
       </div>
       <p className="credits">

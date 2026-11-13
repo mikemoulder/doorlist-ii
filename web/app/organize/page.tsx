@@ -6,6 +6,7 @@ import { isAddress, parseEther, type Address } from 'viem';
 import { AppShell } from '@/components/AppShell';
 import { FirstRun, GhostLink, ORGANIZER_STEPS, SignInAction } from '@/components/FirstRun';
 import { Cover, DoorsBar, StatusTag, useMedia } from '@/components/EventBits';
+import { activeChain, doorTopUp, isBotChain } from '@/lib/chain';
 import { CreateEvent } from '@/components/CreateEvent';
 import { getCheckIns, getEvents, isDoor, PAYOUT_DELAY, FEE_BPS, type DoorEvent } from '@/lib/doorlist';
 import { money, relative, when } from '@/lib/format';
@@ -56,7 +57,7 @@ export default function OrganizePage() {
       {!address ? (
         <FirstRun
           title="Sell tickets on Doorlist"
-          line="Sign in with the wallet you organize with. Listing an event has no Doorlist fee; Portaldot holds a small storage deposit."
+          line={isBotChain ? `Connect an EVM wallet funded with ${activeChain.nativeCurrency.symbol} to create an event.` : "Sign in with the wallet you organize with. Listing an event has no Doorlist fee; Portaldot holds a small storage deposit."}
           actions={
             <>
               <SignInAction />
@@ -80,7 +81,7 @@ export default function OrganizePage() {
       ) : events.length === 0 ? (
         <FirstRun
           title="Create your first event"
-          line="It takes about two minutes and has no Doorlist fee; Portaldot holds a small storage deposit."
+          line={isBotChain ? `Set the date, capacity, and ticket price in ${activeChain.nativeCurrency.symbol}.` : "It takes about two minutes and has no Doorlist fee; Portaldot holds a small storage deposit."}
           actions={
             <button className="pill pill-primary pill-lg" onClick={() => setCreating(true)}>
               Create your first event
@@ -192,8 +193,8 @@ function Doors({ e }: { e: DoorEvent }) {
         setBusy('Approving door…');
         await write('setDoor', [BigInt(e.id), door, true]);
       }
-      setBusy('Sending 1 POT for check-in fees…');
-      await sendValue(door, parseEther('1'));
+      setBusy(`Sending ${doorTopUp} ${activeChain.nativeCurrency.symbol} for check-in fees…`);
+      await sendValue(door, parseEther(doorTopUp));
       setMsg({ ok: true, text: 'Door approved and funded. On that phone, tap Check again.' });
       setAddr('');
     } catch (err) {
@@ -212,7 +213,7 @@ function Doors({ e }: { e: DoorEvent }) {
         </Link>
       </div>
       <p className="muted" style={{ fontSize: 14, marginBottom: 12 }}>
-        On each door phone, open Doorlist → Door and pick this event. Paste the address it shows to approve it. Each door gets 1 POT for its check-in fees.
+        On each door phone, open Doorlist → Door and pick this event. Paste the address it shows to approve it. Each door gets {doorTopUp} {activeChain.nativeCurrency.symbol} for its check-in fees.
       </p>
       <form
         className="sell"

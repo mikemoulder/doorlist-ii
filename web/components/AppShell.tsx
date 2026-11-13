@@ -6,7 +6,7 @@ import { LogOut, Wallet } from 'lucide-react';
 import { Wordmark } from './Logo';
 import { useWallet } from '@/lib/wallet';
 import { shortAddress } from '@/lib/format';
-import { client, DOORLIST, EXPLORER } from '@/lib/chain';
+import { activeChain, client, DOORLIST, EXPLORER } from '@/lib/chain';
 
 const NAV = [
   { href: '/events/', label: 'Events' },
@@ -107,7 +107,7 @@ function NetworkLine() {
       <div className="a-col">
         <span className={`a-live${down ? ' is-down' : ''}`} aria-hidden="true" />
         <span>
-          {down ? 'Can’t reach Portaldot right now. Retrying every 6 seconds.' : block === undefined ? 'Connecting to Portaldot V3 testnet…' : <>Live from Portaldot V3 testnet at block <span className="num">{Number(block).toLocaleString('en-US')}</span>.</>}
+          {down ? `Can’t reach ${activeChain.name} right now. Retrying every 6 seconds.` : block === undefined ? `Connecting to ${activeChain.name}…` : <>Live from {activeChain.name} at block <span className="num">{Number(block).toLocaleString('en-US')}</span>.</>}
         </span>
         <a className="link" href={EXPLORER} title={DOORLIST}>
           Contract {shortAddress(DOORLIST)}

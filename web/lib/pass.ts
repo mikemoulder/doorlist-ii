@@ -2,7 +2,7 @@
 // signs the ticket and the time every few seconds. The door checks both against the chain.
 import { createWalletClient, http, recoverMessageAddress, type Address, type Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { client, DOORLIST, doorlistAbi, portaldot } from './chain';
+import { client, DOORLIST, doorlistAbi, activeChain, isBotChain } from './chain';
 import { getEvent, getTicket } from './doorlist';
 
 export const REFRESH_SECONDS = 10;
@@ -37,7 +37,7 @@ export function encodeCode(ticketId: number, ts: number, device: Address, passSi
  */
 async function passApprover(message: string, sig: Hex, owner: Address): Promise<Address | null> {
   if (sig.length === 2 + 65 * 2) return recoverMessageAddress({ message, signature: sig }).catch(() => null);
-  if (sig.length !== 2 + 64 * 2) return null;
+  if (isBotChain || sig.length !== 2 + 64 * 2) return null;
   const [{ substrateApi }, { signatureVerify, cryptoWaitReady }] = await Promise.all([import('./substrate'), import('@polkadot/util-crypto')]);
   const api = await substrateApi();
   const original = (await api.query.revive.originalAccount(owner)) as unknown as { isSome: boolean; unwrap: () => { toString: () => string } };
@@ -79,7 +79,7 @@ export async function verifyCode(raw: string, eventId: number, now = Math.floor(
 export async function checkInWithDoorKey(ticketId: number) {
   const door = localKey('door');
   const account = privateKeyToAccount(door.privateKey);
-  const wallet = createWalletClient({ account, chain: portaldot, transport: http(portaldot.rpcUrls.default.http[0]) });
+  const wallet = createWalletClient({ account, chain: activeChain, transport: http(activeChain.rpcUrls.default.http[0]) });
   const call = { address: DOORLIST, abi: doorlistAbi as never, functionName: 'checkIn' as never, args: [BigInt(ticketId)] as never, account };
   await client.simulateContract(call);
   const [gas, gasPrice] = await Promise.all([client.estimateContractGas(call), client.getGasPrice()]);

@@ -9,7 +9,7 @@ import { formatEther, type Address } from 'viem';
 import { AppShell } from '@/components/AppShell';
 import { FirstRun, GhostLink } from '@/components/FirstRun';
 import { DoorsBar } from '@/components/EventBits';
-import { client } from '@/lib/chain';
+import { activeChain, client } from '@/lib/chain';
 import { getCheckIns, getEvent, getEvents, isDoor, phase, type DoorEvent } from '@/lib/doorlist';
 import { when } from '@/lib/format';
 import { checkInWithDoorKey, localKey, verifyCode, type Verdict } from '@/lib/pass';
@@ -59,7 +59,7 @@ function PickEvent() {
           steps={[
             { title: 'Choose the event', line: 'This phone checks tickets for that event only.' },
             { title: 'The organizer approves this phone', line: 'Once, from the organizer’s wallet. No pop-ups at the door after that.' },
-            { title: 'Point it at a ticket', line: 'Valid or Refused fills the screen, and the entry is written to Portaldot.' },
+            { title: 'Point it at a ticket', line: 'Valid or Refused fills the screen, and the entry is recorded on-chain.' },
           ]}
         />
       ) : (
@@ -139,7 +139,7 @@ function Setup({ door, approved, fee, onCheck }: { door: Address; approved: bool
         <h2 style={{ fontSize: 16, fontWeight: 600 }}>Ask the organizer to approve this door</h2>
         <ol className="steps">
           <li data-state={approved ? 'done' : 'active'}>The organizer opens Organize, then Doors, and scans this code or pastes the address.</li>
-          <li data-state={fee > 0n ? 'done' : approved ? 'active' : 'todo'}>Doorlist sends this door a little POT for its check-in fees.</li>
+          <li data-state={fee > 0n ? 'done' : approved ? 'active' : 'todo'}>Doorlist sends this door a little {activeChain.nativeCurrency.symbol} for its check-in fees.</li>
         </ol>
         <p className="faint num" style={{ fontSize: 13 }}>
           Door address <span className="id">{door}</span>{' '}
@@ -147,7 +147,7 @@ function Setup({ door, approved, fee, onCheck }: { door: Address; approved: bool
             <Copy size={13} strokeWidth={1.5} style={{ display: 'inline', verticalAlign: -2 }} aria-hidden="true" />
           </button>
           <br />
-          Balance {Number(formatEther(fee)).toFixed(4)} POT · this key stays on this phone only.
+          Balance {Number(formatEther(fee)).toFixed(4)} {activeChain.nativeCurrency.symbol} · this key stays on this phone only.
         </p>
         <button className="pill pill-primary" style={{ justifySelf: 'start' }} onClick={onCheck}>
           Check again

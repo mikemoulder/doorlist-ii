@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { ImagePlus } from 'lucide-react';
 import { decodeEventLog, formatEther, parseEther, parseUnits } from 'viem';
-import { client, DOORLIST, doorlistAbi, DUSD, NATIVE } from '@/lib/chain';
+import { client, DOORLIST, doorlistAbi, DUSD, NATIVE, activeChain, isBotChain } from '@/lib/chain';
 import { compressImage, storeMedia, substrateAccounts, type MediaBundle } from '@/lib/media';
 import { explain, useWallet } from '@/lib/wallet';
 
@@ -13,7 +13,7 @@ type Form = {
 
 export function CreateEvent({ initial = {}, onCancel, onCreated }: { initial?: { name?: string; currency?: 'dUSD' | 'POT' }; onCancel: () => void; onCreated: (id: number) => void }) {
   const { address, ss58, write } = useWallet();
-  const [f, setF] = useState<Form>({ name: initial.name ?? '', date: '', time: '19:00', capacity: '', currency: initial.currency ?? 'dUSD', price: '', perWallet: '0', royalty: '5', venue: '', description: '' });
+  const [f, setF] = useState<Form>({ name: initial.name ?? '', date: '', time: '19:00', capacity: '', currency: isBotChain ? 'POT' : (initial.currency ?? 'dUSD'), price: '', perWallet: '0', royalty: '5', venue: '', description: '' });
   const [accounts, setAccounts] = useState<{ address: string; meta: { name?: string } }[]>();
   const [subAccount, setSubAccount] = useState<string>();
   const [deposit, setDeposit] = useState<bigint>();
@@ -40,7 +40,7 @@ export function CreateEvent({ initial = {}, onCancel, onCreated }: { initial?: {
     const t = setTimeout(async () => {
       try {
         const [gas, gasPrice] = await Promise.all([
-          client.estimateContractGas({ address: DOORLIST, abi: doorlistAbi as never, functionName: 'createEvent' as never, args: args('tstore:0:0:0x' + '0'.repeat(64)) as never, account: address }),
+          client.estimateContractGas({ address: DOORLIST, abi: doorlistAbi as never, functionName: 'createEvent' as never, args: args(isBotChain ? '' : 'tstore:0:0:0x' + '0'.repeat(64)) as never, account: address }),
           client.getGasPrice(),
         ]);
         setDeposit(gas * gasPrice);
@@ -117,27 +117,30 @@ export function CreateEvent({ initial = {}, onCancel, onCreated }: { initial?: {
         <Field id="time" label="Doors open">
           <input id="time" type="time" className="input" value={f.time} onChange={(x) => set('time')(x.target.value)} required />
         </Field>
-        <Field id="venue" label="Venue" wide>
-          <input id="venue" className="input" value={f.venue} onChange={(x) => set('venue')(x.target.value)} />
-        </Field>
-        <Field id="description" label="Description" wide>
-          <textarea id="description" className="input" value={f.description} onChange={(x) => set('description')(x.target.value)} />
-        </Field>
+        {!isBotChain && <>
+          <Field id="venue" label="Venue" wide>
+            <input id="venue" className="input" value={f.venue} onChange={(x) => set('venue')(x.target.value)} />
+          </Field>
+          <Field id="description" label="Description" wide>
+            <textarea id="description" className="input" value={f.description} onChange={(x) => set('description')(x.target.value)} />
+          </Field>
+
+        </>}
 
         <h2 className="form-h">Tickets</h2>
         <Field id="capacity" label="How many">
           <input id="capacity" className="input num" inputMode="numeric" value={f.capacity} onChange={(x) => set('capacity')(x.target.value.replace(/\D/g, ''))} />
         </Field>
-        <Field id="price" label="Price" help={f.currency === 'dUSD' ? 'In dollars (dUSD).' : 'In POT.'}>
+        <Field id="price" label="Price" help={f.currency === 'dUSD' ? 'In dollars (dUSD).' : `In ${activeChain.nativeCurrency.symbol}.`}>
           <div style={{ display: 'flex', gap: 8 }}>
             <input id="price" className="input num" inputMode="decimal" value={f.price} onChange={(x) => set('price')(x.target.value.replace(/[^0-9.]/g, ''))} aria-describedby="price-help" />
-            <div className="seg" role="group" aria-label="Currency">
+            {!isBotChain && <div className="seg" role="group" aria-label="Currency">
               {(['dUSD', 'POT'] as const).map((c) => (
                 <button type="button" key={c} aria-pressed={f.currency === c} onClick={() => set('currency')(c)}>
                   {c}
                 </button>
               ))}
-            </div>
+            </div>}
           </div>
         </Field>
         <Field id="perWallet" label="Most tickets per person" help="0 means no limit.">
@@ -147,24 +150,26 @@ export function CreateEvent({ initial = {}, onCancel, onCreated }: { initial?: {
           <input id="royalty" className="input num" inputMode="decimal" value={f.royalty} onChange={(x) => set('royalty')(x.target.value.replace(/[^0-9.]/g, ''))} aria-describedby="royalty-help" />
         </Field>
 
-        <h2 className="form-h">Pictures</h2>
-        <ImagePick label="Event picture" value={f.image} onPick={(file) => pick('image', file)} />
-        <ImagePick label="Ticket design" value={f.ticket} onPick={(file) => pick('ticket', file)} />
-        {hasMedia && (
-          <Field id="sub" label="Upload with" wide help={`Pictures and details are stored on Portaldot (${Math.round(bytes / 1024)} KB, a fee of a fraction of a POT). They need renewing weekly from this page.`}>
-            {accounts?.length ? (
-              <select id="sub" className="input" value={subAccount} onChange={(x) => setSubAccount(x.target.value)} aria-describedby="sub-help">
-                {accounts.map((a) => (
-                  <option key={a.address} value={a.address}>
-                    {a.meta.name ?? 'Account'} · {a.address.slice(0, 6)}…{a.address.slice(-4)}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <p className="faint" style={{ fontSize: 14 }}>Looking for a Portaldot wallet (SubWallet, polkadot.js, Talisman)…</p>
-            )}
-          </Field>
-        )}
+        {!isBotChain && <>
+          <h2 className="form-h">Pictures</h2>
+          <ImagePick label="Event picture" value={f.image} onPick={(file) => pick('image', file)} />
+          <ImagePick label="Ticket design" value={f.ticket} onPick={(file) => pick('ticket', file)} />
+          {hasMedia && (
+            <Field id="sub" label="Upload with" wide help={`Pictures and details are stored on Portaldot (${Math.round(bytes / 1024)} KB, a fee of a fraction of a POT). They need renewing weekly from this page.`}>
+              {accounts?.length ? (
+                <select id="sub" className="input" value={subAccount} onChange={(x) => setSubAccount(x.target.value)} aria-describedby="sub-help">
+                  {accounts.map((a) => (
+                    <option key={a.address} value={a.address}>
+                      {a.meta.name ?? 'Account'} · {a.address.slice(0, 6)}…{a.address.slice(-4)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="faint" style={{ fontSize: 14 }}>Looking for a Portaldot wallet (SubWallet, polkadot.js, Talisman)…</p>
+              )}
+            </Field>
+          )}
+        </>}
       </section>
 
       <aside className="ev-side">
@@ -172,8 +177,8 @@ export function CreateEvent({ initial = {}, onCancel, onCreated }: { initial?: {
           <h2 style={{ fontSize: 16, fontWeight: 600 }}>Before you create it</h2>
           <ul className="kv">
             <li>
-              <span>Storage deposit</span>
-              <span className="num">{deposit !== undefined ? `≈ ${Number(formatEther(deposit)).toFixed(2)} POT` : '—'}</span>
+              <span>{isBotChain ? 'Estimated network fee' : 'Storage deposit'}</span>
+              <span className="num">{deposit !== undefined ? `≈ ${Number(formatEther(deposit)).toFixed(isBotChain ? 6 : 2)} ${activeChain.nativeCurrency.symbol}` : '—'}</span>
             </li>
             <li>
               <span>Doorlist fee</span>
@@ -184,9 +189,9 @@ export function CreateEvent({ initial = {}, onCancel, onCreated }: { initial?: {
               <span>24 h after doors open</span>
             </li>
           </ul>
-          <p className="faint" style={{ fontSize: 13 }}>
+          {!isBotChain && <p className="faint" style={{ fontSize: 13 }}>
             Portaldot holds a deposit for the space the event takes on the network. Creating an event is otherwise free.
-          </p>
+          </p>}
           {error && <p className="notice notice-error">{error}</p>}
           <button className="pill pill-primary pill-lg" disabled={!valid || !!status}>
             {status ?? (hasMedia ? 'Upload and create' : 'Create event')}
